@@ -1,0 +1,3 @@
+Play.hs line 55, 89, 320
+Deck.hs line 51, 52
+Main.hs line 22, 124

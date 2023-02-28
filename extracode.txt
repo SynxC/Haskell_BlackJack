@@ -1,0 +1,350 @@
+playCard :: PlayFunc
+playCard dealerUpCard playerPoints playerInfo playerId playerMemory playerHand = (theAction, theMemory)
+    where
+        theAction
+            | trace ("bid: pid=" ++ show playerId ++ " pinfo: " ++ show playerInfo ++ " hand: " ++ show playerHand ) False = undefined
+            | isNothing dealerUpCard = Bid minBid
+            | checkCards playerHand = Split minBid
+            | handValue playerHand == Bust = Stand
+            | handValue playerHand == Combo = Stand
+            | length playerHand == 5 && handValue playerHand == Charlie = Stand
+            | handValue playerHand > Value 16 = Stand
+            | handValue playerHand > Value 12 && justCard dealerUpCard < "7" = Stand
+            | otherwise = Hit
+        theMemory = "LOL"
+
+data ActionCards = ActionCards { action1::String, all_cards:: String}
+parsePlayerInfo:: Parser ActionCards
+parsePlayerInfo = do
+    action <- parseUntil ':'
+    discard <- parseUntil ':'
+    return $ ActionCards action discard
+
+instance Show ActionCards where
+    show ActionCards { action1,  all_cards} =
+        "("
+            ++ show action1
+            ++ ","
+            ++ show all_cards
+            ++ ")"
+
+playCard :: PlayFunc
+playCard dealerUpCard playerPoints playerInfo playerId playerMemory playerHand
+    -- | trace ("DealerCard test: " ++ show dealerUpCard) False = undefined
+    -- | trace ("bid: pid=" ++ show playerId ++ " pinfo: " ++ show playerInfo ++ " hand: " ++ show playerHand ) False = undefined
+    -- | traceIf (justPureCard dealerUpCard < Seven)("--------MEMORY OF PLAYER:------------- ID:" ++ show playerId ++ "  " ++ show playerMemory ++ " " ++ show playerHand ++ " " ++ show dealerUpCard) False = undefined
+    -- | traceIf (checkCards playerHand)("--------MEMORY OF PLAYER:------------- ID:" ++ show playerId ++ "  " ++ show playerMemory ++ " " ++ show playerHand) False = undefined
+    -- | justString playerMemory == "Bid" = (Hit, join playerInfo)
+    -- | trace (show( parse parsePlayerInfo (justString playerMemory))) False = undefined
+    -- | trace (show( singleHand(extractHands playerInfo))) False = undefined
+    -- | trace ("Dealer Card: " ++ show dealerUpCard) False = undefined
+    | trace ("Total Hand: " ++ show(singleHand playerInfo) ++ " player: " ++ show playerId ++ " Current Hand: " ++ show playerHand) False = undefined
+    | traceIf(length playerHand == 2)("Total Hand: " ++ show(calcRunningCount(playerHand ++ singleHand playerInfo)) ++ " Hand: " ++ show(playerHand ++ singleHand playerInfo)) False = undefined
+    | justCardRank dealerUpCard == 11 && justString playerMemory == "Bid" = (Insurance (minBid`div`2), "Insurance")
+    | justString playerMemory == "DoubleDown" = (Hit, "DoubleHit")
+    | justString playerMemory == "DoubleHit"  = (Stand, "DoubleStand")
+    | isNothing dealerUpCard = (Bid minBid, "Bid" ++ show(singleHand playerInfo))
+    | checkCards playerHand = (Split minBid, "Split")
+    | handValue playerHand == Combo = (Stand, "Combo")
+    | handValue playerHand == Charlie = (Stand, "Charlie")
+    | handValue playerHand > Value 16 = (Stand, "Valid Play")
+    | handValue playerHand > Value 12 && justCardRank dealerUpCard < 7 = (Stand, "Low Dealer Card")
+    | handValue playerHand == Value 11 && length playerHand == 2 || handValue playerHand == Value 10 && length playerHand == 2 = (DoubleDown minBid, "DoubleDown")
+
+-- Individual Parsers for suits
+parseSpade :: Parser Suit
+parseSpade = is 'S' >> pure Spade
+
+parseHeart :: Parser Suit
+parseHeart = is 'H' >> pure Heart
+
+parseClub :: Parser Suit
+parseClub = is 'C' >> pure Club
+
+parseDiamond :: Parser Suit
+parseDiamond = is 'D' >> pure Diamond
+
+parseSuit :: Parser Suit
+parseSuit = parseSpade ||| parseHeart ||| parseClub ||| parseDiamond
+
+-- Individual Parsers for rankings
+parseAce :: Parser Rank
+parseAce = string "A" >> pure Ace
+
+parseTwo :: Parser Rank
+parseTwo = string "2" >> pure Two
+
+parseThree :: Parser Rank
+parseThree = string "3" >> pure Three
+
+parseFour :: Parser Rank
+parseFour = string "4" >> pure Four
+
+parseFive :: Parser Rank
+parseFive = string "5" >> pure Five
+
+parseSix :: Parser Rank
+parseSix = string "6" >> pure Six
+
+parseSeven :: Parser Rank
+parseSeven = string "7" >> pure Seven
+
+parseEight :: Parser Rank
+parseEight = string "8" >> pure Eight
+
+parseNine :: Parser Rank
+parseNine = string "9" >> pure Nine
+
+parseTen :: Parser Rank
+parseTen = string "10" >> pure Ten
+
+parseJack :: Parser Rank
+parseJack = string "J" >> pure Jack
+
+parseQueen :: Parser Rank
+parseQueen = string "Q" >> pure Queen
+
+parseKing :: Parser Rank
+parseKing = string "K" >> pure King
+
+-- Combined Parsers to detect Rank
+parseRank:: Parser Rank
+parseRank = parseAce ||| parseTwo ||| parseThree ||| parseFour ||| parseFive ||| parseSix ||| parseSeven ||| parseEight ||| parseNine ||| parseTen ||| parseJack ||| parseQueen ||| parseKing
+
+parseCard :: Parser Card
+parseCard = do
+    s <- parseSuit
+    Card s <$> parseRank
+
+parseHand :: Parser Hand
+parseHand = list parseCard
+
+
+-- Maybe Dealer Card
+maybeDealerCard :: Parser (Maybe Card)
+maybeDealerCard = do
+    s <- parseSuit
+    Just . Card s <$> parseRank
+
+maybeDealerCardNothing :: Parser (Maybe Card)
+maybeDealerCardNothing = string "Null" >> pure Nothing
+
+maybeCardEx :: Parser (Maybe Card)
+maybeCardEx = maybeDealerCard ||| maybeDealerCardNothing
+
+-- jsonString :: Parser String
+-- jsonString =
+--   let str = do 
+--            c1 <- character
+--            if c1 == '\\' then 
+--                do c2 <- character
+--                   if c2 == 'u' then hex else
+--                     case toSpecialCharacter c2 of
+--                       Nothing -> unexpectedCharParser c2
+--                       Just d -> return (fromSpecialCharacter d)
+--              else
+--                if c1 == '"' then unexpectedCharParser '"' else return c1
+--   in between (is '"') (charTok '"') (list str)
+
+-- jsonSpecial :: Parser Char
+-- jsonSpecial = is '\\' >> (specialChar ||| hexu)
+
+-- specialChar :: Parser Char
+-- specialChar = character >>= (\d -> case toSpecialCharacter d of
+--   Just x -> pure $ fromSpecialCharacter x
+--   Nothing -> failed $ UnexpectedChar d)
+
+-- hexu :: Parser Char
+-- hexu = is 'u' >> hex
+
+-- hex :: Parser Char
+-- hex = thisMany 4 (satisfy isHexDigit) >>= (\d -> case readHex d of
+--   Just (x,_) -> pure $ chr x
+--   Nothing -> failed $ UnexpectedString d)
+
+-- betweenCharTok :: Char -> Char -> Parser a -> Parser a
+-- betweenCharTok = (. charTok) . between . charTok where
+--     between p1 p2 p3 = do
+--       p1
+--       x <- p3
+--       p2
+--       return x
+
+-- between :: Parser o -> Parser c -> Parser a -> Parser a
+-- between p1 p2 p3 = do
+--   _ <- p1
+--   x <- p3
+--   _ <- p2
+--   return x
+
+-- getActionString:: CountingData -> String
+-- getActionString (CountingData s _ _) = s
+
+-- getParsedRemained:: CountingData -> Int
+-- getParsedRemained (CountingData _ r _) = r
+
+-- getParsedCounting:: CountingData -> Int
+-- getParsedCounting (CountingData _ _ c) = c
+
+memory
+            | trace ("Decks remaining: " ++ show decksRemaining) False=undefined
+            | trace ("dealers hand: " ++ show(singleDealerHand playerInfo)) False=undefined
+            | trace ("Table Hands: " ++ show (singleHand playerInfo)) False=undefined
+            | trace ("PlayerId: " ++ show playerId ++ " | Hands: " ++ show playerHand) False=undefined
+            | trace ("PlayerId: " ++ show playerId ++ " | Action: " ++ show updatedAction ++ " | Count: " ++ show remainingCards) False=undefined
+            | otherwise = convertCountingData $ createCountingData updatedAction remainingCards currentRC
+
+parseActionWithDigit :: Parser String
+parseActionWithDigit = do
+    s <- parseUntil ' '
+    _ <- digits
+    is ':'
+    pure s
+
+| trace ("PlayerId: " ++ show playerId ++ " | Action: " ++ show updatedAction ++ " | Count: " ++ show remainingCards) False=undefined
+
+updatedAces
+            -- | traceIf(isNothing dealerUpCard && Ace `elem` map getRank (singleDealerHand playerInfo))("Dealer Hand: " ++ show (singleDealerHand playerInfo))False=undefined
+            | isNothing dealerUpCard = parsedAces - countCards(==Ace)(map getRank (singleHand playerInfo))
+            | length playerHand >2 && getRank (head playerHand) == Ace = parsedAces - 1
+            | otherwise = parsedAces
+        updatedTwos
+            | isNothing dealerUpCard && Two `elem` map getRank (singleDealerHand playerInfo) = parsedTwos - 1
+            | length playerHand == 2 && Two `elem` map getRank playerHand = parsedTwos - 1
+            | length playerHand >2 && getRank (head playerHand) == Two = parsedTwos - 1
+            | otherwise = parsedTwos
+        updatedThrees
+            | isNothing dealerUpCard && Three `elem` map getRank (singleDealerHand playerInfo) = parsedThrees - 1
+            | length playerHand == 2 && Three `elem` map getRank playerHand = parsedThrees - 1
+            | length playerHand >2 && getRank (head playerHand) == Three = parsedThrees - 1
+            | otherwise = parsedThrees
+        updatedFours
+            | isNothing dealerUpCard && Four `elem` map getRank (singleDealerHand playerInfo) = parsedFours - 1
+            | length playerHand == 2 && Four `elem` map getRank playerHand = parsedFours - 1
+            | length playerHand >2 && getRank (head playerHand) == Four = parsedFours - 1
+            | otherwise = parsedFours
+        updatedFives
+            | isNothing dealerUpCard && Five `elem` map getRank (singleDealerHand playerInfo) = parsedFives - 1
+            | length playerHand == 2 && Five `elem` map getRank playerHand = parsedFives - 1
+            | length playerHand >2 && getRank (head playerHand) == Five = parsedFives - 1
+            | otherwise = parsedFives
+        updatedSixes
+            | isNothing dealerUpCard && Six `elem` map getRank (singleDealerHand playerInfo) = parsedSixes - 1
+            | length playerHand == 2 && Six `elem` map getRank playerHand = parsedSixes - 1
+            | length playerHand >2 && getRank (head playerHand) == Six = parsedSixes - 1
+            | otherwise = parsedSixes
+        updatedSevens
+            | isNothing dealerUpCard && Seven `elem` map getRank (singleDealerHand playerInfo) = parsedSevens - 1
+            | length playerHand == 2 && Seven `elem` map getRank playerHand = parsedSevens - 1
+            | length playerHand >2 && getRank (head playerHand) == Seven = parsedSevens - 1
+            | otherwise = parsedSevens
+        updatedEights
+            | isNothing dealerUpCard && Eight `elem` map getRank (singleDealerHand playerInfo) = parsedEights - 1
+            | length playerHand == 2 && Eight `elem` map getRank playerHand = parsedEights - 1
+            | length playerHand >2 && getRank (head playerHand) == Eight = parsedEights - 1
+            | otherwise = parsedEights
+        updatedNines
+            | isNothing dealerUpCard && Nine `elem` map getRank (singleDealerHand playerInfo) = parsedNines - 1
+            | length playerHand == 2 && Nine `elem` map getRank playerHand = parsedNines - 1
+            | length playerHand >2 && getRank (head playerHand) == Nine = parsedNines - 1
+            | otherwise = parsedNines
+        updatedTens
+            | isNothing dealerUpCard && Ten `elem` map getRank (singleDealerHand playerInfo) = parsedTens - 1
+            | length playerHand == 2 && Ten `elem` map getRank playerHand = parsedTens - 1
+            | length playerHand >2 && getRank (head playerHand) == Ten = parsedTens - 1
+            | otherwise = parsedTens
+        updatedJacks
+            | isNothing dealerUpCard && Jack `elem` map getRank (singleDealerHand playerInfo) = parsedJacks - 1
+            | length playerHand == 2 && Jack `elem` map getRank playerHand = parsedJacks - 1
+            | length playerHand >2 && getRank (head playerHand) == Jack = parsedJacks - 1
+            | otherwise = parsedJacks
+        updatedQueens
+            | isNothing dealerUpCard && Queen `elem` map getRank (singleDealerHand playerInfo) = parsedQueens - 1
+            | length playerHand == 2 && Queen `elem` map getRank playerHand = parsedQueens - 1
+            | length playerHand >2 && getRank (head playerHand) == Queen = parsedQueens - 1
+            | otherwise = parsedQueens
+        updatedKings
+            | isNothing dealerUpCard && King `elem` map getRank (singleDealerHand playerInfo) = parsedKings - 1
+            | length playerHand == 2 && King `elem` map getRank playerHand = parsedKings - 1
+            | length playerHand >2 && getRank (head playerHand) == King = parsedKings - 1
+            | otherwise = parsedKings
+
+updatedCards
+            | length playerHand == 2 || null playerHand = trueCount - length(singleHand playerInfo) + length(singleDealerHand playerInfo)
+            | length playerHand == 2 && trueCount - length(singleHand playerInfo) < 0 = 156 + trueCount - length(singleHand playerInfo)
+            | otherwise = parsedRemaining
+
+updatedAces
+            | isNothing dealerUpCard = parsedAces - countCards(==Ace)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedAces - countCards(==Ace)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Ace = parsedAces - 1
+            | otherwise = parsedAces
+        updatedTwos
+            | isNothing dealerUpCard = parsedTwos - countCards(==Two)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedTwos - countCards(==Two)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Two = parsedTwos - 1
+            | otherwise = parsedTwos
+        updatedThrees
+            | isNothing dealerUpCard = parsedThrees - countCards(==Three)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedThrees - countCards(==Three)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Three = parsedThrees - 1
+            | otherwise = parsedThrees
+        updatedFours
+            | isNothing dealerUpCard = parsedFours - countCards(==Four)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedFours - countCards(==Four)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Four = parsedFours - 1
+            | otherwise = parsedFours
+        updatedFives
+            | isNothing dealerUpCard = parsedFives - countCards(==Five)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedFives - countCards(==Five)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Five = parsedFives - 1
+            | otherwise = parsedFives
+        updatedSixes
+            | isNothing dealerUpCard = parsedSixes - countCards(==Six)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedSixes - countCards(==Six)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Six = parsedSixes - 1
+            | otherwise = parsedSixes
+        updatedSevens
+            | isNothing dealerUpCard = parsedSevens - countCards(==Seven)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedSevens - countCards(==Seven)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Seven = parsedSevens - 1
+            | otherwise = parsedSevens
+        updatedEights
+            | isNothing dealerUpCard = parsedEights - countCards(==Eight)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedEights - countCards(==Eight)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Eight = parsedEights - 1
+            | otherwise = parsedEights
+        updatedNines
+            | isNothing dealerUpCard = parsedNines - countCards(==Nine)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedNines - countCards(==Nine)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Nine = parsedNines - 1
+            | otherwise = parsedNines
+        updatedTens
+            | isNothing dealerUpCard = parsedTens - countCards(==Ten)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedTens - countCards(==Ten)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Ten = parsedTens - 1
+            | otherwise = parsedTens
+        updatedJacks
+            | isNothing dealerUpCard = parsedJacks - countCards(==Jack)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedJacks - countCards(==Jack)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Jack = parsedJacks - 1
+            | otherwise = parsedJacks
+        updatedQueens
+            | isNothing dealerUpCard = parsedQueens - countCards(==Queen)(map getRank (singleExcludePlayerHand playerId playerInfo))
+            | parsedAction == "Bid" || parsedAction == "Insurance" = parsedQueens - countCards(==Queen)(map getRank (singleExcludeDealer playerInfo ++ playerHand))
+            | length playerHand >2 && getRank (head playerHand) == Queen = parsedQueens - 1
+            | otherwise = parsedQueens
+
+-- | traceIf (checkCards playerHand && doSplit && parsedAction /= "Split" )("ID:" ++ show playerId ++"Player Split Hand: " ++ show(playerHand) ++ " DealerUp Card: " ++ show(justCardRank dealerUpCard))False=undefined
+            -- | traceIf(null playerHand)("ID: " ++ show playerId ++ "Bid Amount: " ++ show adjustedBid ++ " Running Count" ++ show countingOdds) False=undefined
+            -- | traceIf( length playerHand /= 0)("ID" ++ show playerId ++ "Hand: " ++ show playerHand ++ "Head: " ++ show (head playerHand)) False=undefined
+            | trace ("------------------" ++ show playerId ++ "---------------------------") False=undefined
+            | trace("ID: " ++ show playerId ++ " Mem: " ++ show(removePunc(justString playerMemory)) ++" Remaining Count: "++ show parsedRemaining ++ "Hand: " ++ show playerHand)False=undefined
+            -- | trace("ID: " ++ show playerId ++ " Cards played: " ++ show (singleHand playerInfo)) False=undefined
+            -- | trace("Count ace: " ++ show(countCards(==Ace)(map getRank (singleHand playerInfo))))False=undefined
+            -- | trace("Dealer's up Card: " ++ show(justCardRank dealerUpCard)) False=undefined
+            -- | trace("Dealer Hand: " ++ show(singleDealerHand playerInfo)) False=undefined
+            | trace("Table Hand with Dealer: " ++ show (singleHand playerInfo)) False=undefined
+            | trace("Table Hand w/o Player: " ++ show (singleExcludePlayerHand playerId playerInfo)) False=undefined
+            | trace("Table Hand w/o Dealer: " ++ show (singleExcludeDealer playerInfo)) False=undefined
+            | traceIf(handValue playerHand == Bust)("Busted Hand: " ++ show playerHand) False=undefined 
